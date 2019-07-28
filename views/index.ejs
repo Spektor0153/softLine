@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<link rel='stylesheet' href='/css/style.css' />
+	<link rel='stylesheet' href='/css/bootstrap.min.css' />
+	<link rel='stylesheet' href='/css/bootstrap-table.css' />
+	<link rel='stylesheet' href='/css/bootstrap-editable.css' />
+	<link rel='stylesheet' href='/css/bootstrap-treeview.min.css' />
+	<link rel='stylesheet' href='/css/all.css' />
+	<script src="/js/jquery-3.4.1.min.js"></script>
+	<script src="/js/popper.min.js"></script>
+	<script src="/js/bootstrap.min.js"></script>
+	<script src="/js/bootstrap-table.js"></script>
+	<script src="/js/bootstrap-treeview.min.js"></script>
+	<script src="/js/bootstrap-editable.js"></script>
+	<script src="/js/bootstrap-table-editable.js"></script>
+
+	<script type="text/javascript">
+		$(document).ready(function(){
+
+			var tree_str=<%- JSON.stringify(tree) %>;
+			var memory_splitter='';
+			var memory_file='';
+			var memory_header=true;
+			var path_file='';
+
+			function getTree() {
+				return data;
+			}
+
+			$('#tree').treeview({
+				levels: 99,
+				color: "#428bca",
+				expandIcon: 'fas fa-chevron-right',
+				collapseIcon: 'fas fa-chevron-down',
+				nodeIcon: 'fas fa-file-invoice',
+				showTags: true,
+				data: tree_str
+			});
+
+
+			$('#table_head').on('editable-save.bs.table', function (name, args) {
+				var data_reload=$('#table_head').bootstrapTable('getData')[0];
+
+				$.each(data_reload, function( index, value ) { 
+					$('#table_head').bootstrapTable('updateColumnTitle', {field: index, title: value});
+					$('#table_body').bootstrapTable('updateColumnTitle', {field: index, title: value});	
+				});
+
+				
+			});
+
+
+			$('#b_add_row').on('click', ()=>{
+				var data_reload=$('#table_head').bootstrapTable('getData')[0];
+				var add_row_mass=[{}];
+				$.each(data_reload, function( index, value ) { 
+					add_row_mass[0][index]='';
+				});
+				
+				$('#table_body').bootstrapTable('append', add_row_mass)
+			});	
+
+
+
+			function create_path_file(parentId) {
+
+				if ($('#tree').treeview('getNode', parentId).parentId==undefined) {
+					console.log($('#tree').treeview('getNode', parentId));
+					path_file=$('#tree').treeview('getNode', parentId).text+'/'+path_file;
+				} else {
+					console.log($('#tree').treeview('getNode', parentId));
+					path_file=$('#tree').treeview('getNode', parentId).text+'/'+path_file;
+					create_path_file($('#tree').treeview('getNode', parentId).parentId);
+
+				}
+
+
+			}
+
+
+			$('#input_file_name').on('click', function(){
+				$('#treeModal').modal('show');
+				$('#input_file_name').blur();
+			});
+			$('#file_chose').on('click', ()=>{
+				if ($('#tree').treeview('getSelected').length==0) {
+					$('#input_file_name').val('');
+				} else {
+
+					if ($('#tree').treeview('getSelected')[0].parentId==undefined) {
+						path_file=$('#tree').treeview('getSelected')[0].text;
+
+					} else {
+						path_file=$('#tree').treeview('getSelected')[0].text;
+						create_path_file($('#tree').treeview('getSelected')[0].parentId);
+					}
+
+					$('#input_file_name').val(path_file);
+
+				}
+				$('#p_server_error').hide();	
+				$('#input_chose_file_error').hide();
+				$('#treeModal').modal('hide');
+			});
+
+			$('[name="radio-stacked"]').change(()=>{
+				$('#input_radio_stacked_error').hide();
+			});
+
+
+			function change_symbol(text) {
+				var map = {
+					'&quot;': '\\"',
+					'&#039;': "\\'"
+				};
+
+				return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+			}
+
+
+			$('#b_save_data').on('click', ()=> {
+				var rename_head=$('#table_head').bootstrapTable('getData')[0];
+				var rename_data=[];
+				var real_data=$('#table_body').bootstrapTable('getData');
+
+				for(i = 0; i < real_data.length; i++){
+					rename_data.push({});
+					$.each(real_data[i], function( index, value ) { 
+						rename_data[rename_data.length-1][rename_head[index]]=value;
+					});
+
+				}
+
+				var json_data=JSON.stringify(rename_data).split("&quot;").join("\\\"");
+	         		//console.log(json_data);
+	         		//console.log('data='+json_data+'&memory_splitter='+memory_splitter+'&memory_file='+memory_file+'&memory_header='+memory_header);
+
+	         	$.ajax({ 
+	         			url: '/save_files',
+	         			type: 'POST',
+	         			data: 'data='+json_data+'&memory_splitter='+memory_splitter+'&memory_file='+memory_file+'&memory_header='+memory_header,
+	         			success: function(data){ 
+	         				show_green_add_modal(data);
+	         			}, 
+	         			error: function(jqXHR, textStatus, err){
+	         				$('#p_server_error').text(err);
+	         				$('#p_server_error').show();
+	         				console.log(err);
+	         			}
+	         	});
+	        });
+
+
+			$('#send_form_button').on('click', ()=> {
+
+				var check_form=true;
+
+				if ($('#input_file_name').val().length>0) {
+					$('#input_chose_file_error').hide();
+				} else {
+					$('#input_chose_file_error').show();
+					check_form=false;
+				}
+
+				if ($('[name="radio-stacked"]:checked').val()==undefined) {
+					$('#input_radio_stacked_error').show();
+					check_form=false;
+				} else {
+					$('#input_radio_stacked_error').hide();
+				}
+
+				if (check_form) {
+					memory_splitter=$('[name="radio-stacked"]:checked').val();
+					memory_file=$('#input_file_name').val();
+					memory_header=$('#check_header').is(":checked");
+
+					var formData = $('#form_file').serialize();
+		       		  //console.log(formData);
+
+		       		  $.ajax({ 
+		       		  	url: '/files',
+		       		  	type: 'POST',
+		       		  	data: formData,
+		       		  	success: function(data){
+		       		  		var column_mass_edit=[{}];
+
+		       		  		$('#table_body').bootstrapTable('destroy').bootstrapTable({
+		       		  			columns: data.head,
+		       		  			data: data.body
+		       		  		});
+
+		       		  		for (i in data.head) {
+		       		  			column_mass_edit[0][data.head[i].field]=data.head[i].field;
+		       		  		}
+		       		  		$('#table_head').bootstrapTable('destroy').bootstrapTable({
+		       		  			columns: data.head,
+		       		  			showHeader: false,
+		       		  			data: column_mass_edit
+		       		  		});
+		       		  		$('.col_with_data').show();
+		       		  		show_green_add_modal('Файл загружен!');
+
+		       		  	}, error: function(jqXHR, textStatus, err){
+		       		  		$('#p_server_error').text(err);
+		       		  		$('#p_server_error').show();
+		       		  		console.log(err);
+		       		  	}
+		       		  });
+		       		}
+		       	});
+
+
+			function show_green_add_modal(text){
+				$('#alert_window_zakaz_p span').html(text);
+				$('#alert_window_zakaz').fadeIn(300);
+				function func_show_modal() {
+					$('#alert_window_zakaz').fadeOut(300);
+				}
+				setTimeout(func_show_modal, 3000);	
+			}
+
+
+
+
+		});
+	</script>
+</head>
+<body>
+
+
+
+
+	<div class="container">
+		<div class="row">
+			<div class="col-md-12">
+				<div class="header_block">
+					<h1><%= title %></h1>
+					<p>Тестовое задание</p>
+				</div>
+
+			</div>
+		</div>
+		<div class="row">
+
+			<div class="col-md-4">
+				<form id="form_file" class="was-validated" action="files" method="post">
+					<div class="mb-3">
+
+						<label for="input_file_name">Имя файла:</label>
+
+						<div style="position: relative;">
+							<input type="text" class="form-control" id="input_file_name" name="file_name" placeholder="Название файла" onkeydown="return false" autocomplete="off" required>
+							<button id="input_chose_file" type="button" class="btn btn-primary" data-toggle="modal" data-target="#treeModal">Выбрать</button>
+						</div>
+						<div id="input_chose_file_error" class="invalid-feedback">
+							<p>Выберите файл!</p>
+						</div>
+					</div>
+
+					<div class="custom-control custom-checkbox mb-3">
+						<input type="checkbox" class="custom-control-input"  name="file_head"  id="check_header" >
+						<label class="custom-control-label" for="check_header">Первая строка содержит заголовки</label>
+					</div>
+
+					<div class="mb-3">
+						<label for="validationTextarea">Разделитель ячеек:</label>
+
+
+						<div class="custom-control custom-radio">
+							<input type="radio" class="custom-control-input" value="1" id="customControlValidation2" name="radio-stacked" required>
+							<label class="custom-control-label" for="customControlValidation2">Знак табуляции</label>
+						</div>
+						<div class="custom-control custom-radio">
+							<input type="radio" class="custom-control-input" value="2" id="customControlValidation3" name="radio-stacked" required>
+							<label class="custom-control-label" for="customControlValidation3">Пробел</label>
+						</div>
+						<div class="custom-control custom-radio">
+							<input type="radio" class="custom-control-input" value="3" id="customControlValidation4" name="radio-stacked" required>
+							<label class="custom-control-label" for="customControlValidation4">Точка с запятой</label>
+						</div>
+
+
+						<div id="input_radio_stacked_error" class="invalid-feedback">Выберите разделитель для чтения файла!</div>
+
+					</div>
+					<div class="mb-3">
+						<button id="send_form_button" type="button" class="btn btn-success">Прочитать данные</button>
+						<p id="p_server_error"></p>
+					</div>
+
+
+
+
+				</form>
+			</div>
+			<div class="col-md-8 col_with_data">
+				<h3>Названия столбцов</h3>	
+				<table id="table_head" class="table table-hover"></table>
+				<h3>Данные из файла</h3>	
+				<table id="table_body" class="table table-hover"></table>
+				<div class="d-flex justify-content-between">
+					<button id="b_add_row" class="btn btn-secondary">Добавить строку</button>
+					<button id="b_save_data" class="btn btn-success">Сохранить на сервере</button>	
+				</div>
+
+
+			</div>
+		</div>
+	</div>
+
+
+
+	<div class="modal fade" id="treeModal" tabindex="-1" role="dialog" aria-labelledby="treeModalLabel" aria-hidden="true">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="treeModalLabel">Выбор файла</h5>
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<div class="modal-body">
+					<p class="treeModal_p">Выберите текстовый файл для чтения из файловой структуры сервера.</p>
+
+					<div id="tree"></div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+					<button id="file_chose" type="button" class="btn btn-primary">Выбрать</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="" id="alert_window_zakaz" style="display: none;">
+		<p id="alert_window_zakaz_p"><span></span> </p>
+	</div>
+
+</body>
+</html>
